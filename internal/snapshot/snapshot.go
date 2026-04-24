@@ -40,6 +40,20 @@ func Unmarshal(data []byte) (*Snapshot, error) {
 	return &s, nil
 }
 
+// Equal reports whether two snapshots have identical entries, ignoring
+// metadata fields like ID, Timestamp, and Label.
+func (s *Snapshot) Equal(other *Snapshot) bool {
+	if len(s.Entries) != len(other.Entries) {
+		return false
+	}
+	for k, v := range s.Entries {
+		if other.Entries[k] != v {
+			return false
+		}
+	}
+	return true
+}
+
 // generateID creates a deterministic SHA-256-based ID from timestamp and entries.
 func generateID(t time.Time, entries map[string]string) string {
 	h := sha256.New()
