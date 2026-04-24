@@ -1,13 +1,6 @@
 package diff
 
-import (
-	"fmt"
-	"sort"
-
-	"github.com/trackpoint/internal/snapshot"
-)
-
-// ChangeType represents the kind of change detected.
+// ChangeType describes the nature of a single key-level change.
 type ChangeType string
 
 const (
@@ -18,57 +11,52 @@ const (
 
 // Change represents a single key-level difference between two snapshots.
 type Change struct {
-	Key    string
-	Type   ChangeType
-	OldVal interface{}
-	NewVal interface{}
+	Key  string
+	Type ChangeType
+	From string
+	To   string
 }
 
-// Result holds the full diff between two snapshots.
+// Result holds the full output of comparing two snapshots.
 type Result struct {
 	FromID  string
 	ToID    string
 	Changes []Change
 }
 
-// HasChanges returns true if any changes were detected.
-func (r *Result) HasChanges() bool {
+// HasChanges returns true when the result contains at least one change.
+func (r Result) HasChanges() bool {
 	return len(r.Changes) > 0
 }
 
-// Summary returns a human-readable summary of the diff.
-func (r *Result) Summary() string {
-	if !r.HasChanges() {
-		return fmt.Sprintf("No changes between %s and %s", r.FromID, r.ToID)
-	}
-	return fmt.Sprintf("%d change(s) between %s and %s", len(r.Changes), r.FromID, r.ToID)
+type snapshotIface interface {
+	GetID() string
+	GetData() map[string]string
 }
 
-// Compare computes the diff between two snapshots.
-func Compare(from, to *snapshot.Snapshot) *Result {
-	result := &Result{
-		FromID: from.ID,
-		ToID:   to.ID,
+// Compare produces a Result describing all differences between from and to.
+func Compare(from, to snapshotIface) Result {
+	result := Result{
+		FromID: from.GetID(),
+		ToID:   to.GetID(),
 	}
 
-	for key, newVal := range to.State {
-		oldVal, exists := from.State[key]
-		if !exists {
-			result.Changes = append(result.Changes, Change{Key: key, Type: Added, NewVal: newVal})
-		} else if fmt.Sprintf("%v", oldVal) != fmt.Sprintf("%v", newVal) {
-			result.Changes = append(result.Changes, Change{Key: key, Type: Modified, OldVal: oldVal, NewVal: newVal})
+	fromData := from.GetData()
+	toData := to.GetData()
+
+	for k, fv := range fromData {
+		if tv, ok := toData[k]; !ok {
+			result.Changes = append(result.Changes, Change{Key: k, Type: Removed, From: fv})
+		} else if fv != tv {
+			result.Changes = append(result.Changes, Change{Key: k, Type: Modified, From: fv, To: tv})
 		}
 	}
 
-	for key, oldVal := range from.State {
-		if _, exists := to.State[key]; !exists {
-			result.Changes = append(result.Changes, Change{Key: key, Type: Removed, OldVal: oldVal})
+	for k, tv := range toData {
+		if _, ok := fromData[k]; !ok {
+			result.Changes = append(result.Changes, Change{Key: k, Type: Added, To: tv})
 		}
 	}
-
-	sort.Slice(result.Changes, func(i, j int) bool {
-		return result.Changes[i].Key < result.Changes[j].Key
-	})
 
 	return result
 }
