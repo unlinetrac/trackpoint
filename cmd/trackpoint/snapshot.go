@@ -37,14 +37,24 @@ func init() {
 	rootCmd.AddCommand(snapshotCmd)
 }
 
-func runTakeSnapshot(cmd *cobra.Command, args []string) error {
+// parseKeyValuePairs parses a slice of "KEY=VALUE" strings into a map.
+// Returns an error if any entry does not contain an "=" separator.
+func parseKeyValuePairs(args []string) (map[string]string, error) {
 	state := make(map[string]string, len(args))
 	for _, arg := range args {
 		parts := strings.SplitN(arg, "=", 2)
 		if len(parts) != 2 {
-			return fmt.Errorf("invalid KEY=VALUE pair: %q", arg)
+			return nil, fmt.Errorf("invalid KEY=VALUE pair: %q", arg)
 		}
 		state[parts[0]] = parts[1]
+	}
+	return state, nil
+}
+
+func runTakeSnapshot(cmd *cobra.Command, args []string) error {
+	state, err := parseKeyValuePairs(args)
+	if err != nil {
+		return err
 	}
 
 	snap := snapshot.New(snapshotSource, state)
