@@ -64,6 +64,17 @@ func TestHasChanges(t *testing.T) {
 	}
 }
 
+func TestHasChanges_NoChanges(t *testing.T) {
+	state := map[string]interface{}{"x": 1}
+	from := makeSnap(t, "v1", state)
+	to := makeSnap(t, "v2", state)
+
+	r, _ := report.New(from, to)
+	if r.HasChanges() {
+		t.Error("expected HasChanges to be false when state is identical")
+	}
+}
+
 func TestWrite_TextFormat_NoChanges(t *testing.T) {
 	state := map[string]interface{}{"key": "val"}
 	from := makeSnap(t, "v1", state)
