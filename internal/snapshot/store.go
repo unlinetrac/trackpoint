@@ -10,67 +10,65 @@ import (
 	"strings"
 )
 
-// Store manages persistence of snapshots on the local filesystem.
-// Each snapshot is stored as a JSON file named by its ID within a directory.
+// Store manages persistence of snapshots on disk.
+// Each snapshot is stored as a JSON file named by its ID.
 type Store struct {
 	dir string
 }
 
-// NewStore creates a Store that reads and writes snapshots under the given
-// directory. The directory is created lazily on first write.
+// NewStore creates a Store that reads and writes snapshots under dir.
+// The directory is created lazily on first write.
 func NewStore(dir string) *Store {
 	return &Store{dir: dir}
 }
 
-// Save persists a snapshot to disk. The file is named <id>.json.
-// The storage directory is created if it does not already exist.
+// Save writes s to disk as <dir>/<s.ID>.json, creating the directory if needed.
 func (s *Store) Save(snap *Snapshot) error {
-	if err := os.MkdirAll(s.dir, 0o755); err != nil {
-		return fmt.Errorf("snapshot store: create dir: %w", err)
+	if snap == nil {
+		return errors.New("snapshot: cannot save nil snapshot")
 	}
-
+	if err := os.MkdirAll(s.dir, 0o755); err != nil {
+		return fmt.Errorf("snapshot: create store dir: %w", err)
+	}
 	data, err := json.MarshalIndent(snap, "", "  ")
 	if err != nil {
-		return fmt.Errorf("snapshot store: marshal: %w", err)
+		return fmt.Errorf("snapshot: marshal: %w", err)
 	}
-
-	path := filepath.Join(s.dir, snap.ID+".json")
+	path := s.snapshotPath(snap.ID)
 	if err := os.WriteFile(path, data, 0o644); err != nil {
-		return fmt.Errorf("snapshot store: write file: %w", err)
+		return fmt.Errorf("snapshot: write %s: %w", path, err)
 	}
 	return nil
 }
 
-// Load retrieves a snapshot by ID. Returns an error wrapping os.ErrNotExist
-// when no snapshot with that ID is found.
+// Load reads the snapshot with the given id from disk.
+// Returns an error wrapping os.ErrNotExist if the snapshot is not found.
 func (s *Store) Load(id string) (*Snapshot, error) {
-	path := filepath.Join(s.dir, id+".json")
+	path := s.snapshotPath(id)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("snapshot store: id %q not found: %w", id, os.ErrNotExist)
+			return nil, fmt.Errorf("snapshot %q not found: %w", id, os.ErrNotExist)
 		}
-		return nil, fmt.Errorf("snapshot store: read file: %w", err)
+		return nil, fmt.Errorf("snapshot: read %s: %w", path, err)
 	}
-
 	snap, err := Unmarshal(data)
 	if err != nil {
-		return nil, fmt.Errorf("snapshot store: unmarshal %q: %w", id, err)
+		return nil, fmt.Errorf("snapshot: unmarshal %s: %w", path, err)
 	}
 	return snap, nil
 }
 
-// List returns all snapshot IDs stored in the directory, sorted lexicographically.
-// Returns an empty slice (and no error) when the directory does not exist yet.
+// List returns all snapshot IDs present in the store, sorted lexicographically.
+// Returns an empty slice (and no error) when the store directory does not exist.
 func (s *Store) List() ([]string, error) {
 	entries, err := os.ReadDir(s.dir)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return []string{}, nil
 		}
-		return nil, fmt.Errorf("snapshot store: read dir: %w", err)
+		return nil, fmt.Errorf("snapshot: list store dir: %w", err)
 	}
-
 	var ids []string
 	for _, e := range entries {
 		if e.IsDir() {
@@ -81,7 +79,11 @@ func (s *Store) List() ([]string, error) {
 			ids = append(ids, strings.TrimSuffix(name, ".json"))
 		}
 	}
-
 	sort.Strings(ids)
 	return ids, nil
+}
+
+// snapshotPath returns the full file path for a snapshot with the given id.
+func (s *Store) snapshotPath(id string) string {
+	return filepath.Join(s.dir, id+".json")
 }
