@@ -95,3 +95,27 @@ func TestStore_List_NoDir(t *testing.T) {
 	}
 	_ = os.RemoveAll("/tmp/trackpoint_nonexistent_dir_xyz")
 }
+
+func TestStore_Save_Overwrite(t *testing.T) {
+	dir := t.TempDir()
+	store := snapshot.NewStore(dir)
+
+	snap := snapshot.New("env:prod", map[string]string{"KEY": "original"})
+	if err := store.Save(snap); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	// Overwrite the same snapshot with updated state.
+	snap.State["KEY"] = "updated"
+	if err := store.Save(snap); err != nil {
+		t.Fatalf("Save() overwrite error = %v", err)
+	}
+
+	loaded, err := store.Load(snap.ID)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if loaded.State["KEY"] != "updated" {
+		t.Errorf("expected overwritten value %q, got %q", "updated", loaded.State["KEY"])
+	}
+}
