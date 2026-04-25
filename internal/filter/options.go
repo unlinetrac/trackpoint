@@ -49,3 +49,10 @@ func (o Options) Summary() string {
 	}
 	return strings.Join(parts, " ")
 }
+
+// IsEmpty reports whether the Options has no active filters set.
+// This is useful for short-circuiting filter logic when no constraints
+// have been configured.
+func (o Options) IsEmpty() bool {
+	return o.KeyPrefix == "" && o.KeyPattern == "" && len(o.Types) == 0
+}
