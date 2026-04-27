@@ -4,62 +4,56 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"time"
 )
 
-// Snapshot represents a captured state of infrastructure at a point in time.
+// Snapshot holds a point-in-time capture of key/value infrastructure state.
 type Snapshot struct {
 	ID        string            `json:"id"`
-	Timestamp time.Time         `json:"timestamp"`
-	Label     string            `json:"label,omitempty"`
-	Entries   map[string]string `json:"entries"`
+	CreatedAt time.Time         `json:"created_at"`
+	Data      map[string]string `json:"data"`
+	Tags      map[string]string `json:"tags,omitempty"`
 }
 
-// New creates a new Snapshot with the given label and key-value entries.
-func New(label string, entries map[string]string) *Snapshot {
+// New creates a new Snapshot from the provided data map.
+func New(data map[string]string) *Snapshot {
 	now := time.Now().UTC()
 	return &Snapshot{
-		ID:        generateID(now, entries),
-		Timestamp: now,
-		Label:     label,
-		Entries:   entries,
+		ID:        generateID(data, now),
+		CreatedAt: now,
+		Data:      data,
+		Tags:      make(map[string]string),
 	}
 }
 
-// Marshal serializes the snapshot to JSON bytes.
+// Marshal serialises a Snapshot to JSON bytes.
 func (s *Snapshot) Marshal() ([]byte, error) {
 	return json.MarshalIndent(s, "", "  ")
 }
 
-// Unmarshal deserializes a snapshot from JSON bytes.
-func Unmarshal(data []byte) (*Snapshot, error) {
+// Unmarshal deserialises JSON bytes into a Snapshot.
+func Unmarshal(b []byte) (*Snapshot, error) {
 	var s Snapshot
-	if err := json.Unmarshal(data, &s); err != nil {
-		return nil, fmt.Errorf("snapshot: failed to unmarshal: %w", err)
+	if err := json.Unmarshal(b, &s); err != nil {
+		return nil, fmt.Errorf("snapshot: unmarshal: %w", err)
 	}
 	return &s, nil
 }
 
-// Equal reports whether two snapshots have identical entries, ignoring
-// metadata fields like ID, Timestamp, and Label.
-func (s *Snapshot) Equal(other *Snapshot) bool {
-	if len(s.Entries) != len(other.Entries) {
-		return false
+// generateID produces a deterministic SHA-256-based ID from the snapshot data
+// and creation timestamp.
+func generateID(data map[string]string, t time.Time) string {
+	keys := make([]string, 0, len(data))
+	for k := range data {
+		keys = append(keys, k)
 	}
-	for k, v := range s.Entries {
-		if other.Entries[k] != v {
-			return false
-		}
-	}
-	return true
-}
+	sort.Strings(keys)
 
-// generateID creates a deterministic SHA-256-based ID from timestamp and entries.
-func generateID(t time.Time, entries map[string]string) string {
 	h := sha256.New()
 	fmt.Fprintf(h, "%d", t.UnixNano())
-	for k, v := range entries {
-		fmt.Fprintf(h, "%s=%s", k, v)
+	for _, k := range keys {
+		fmt.Fprintf(h, "%s=%s;", k, data[k])
 	}
-	return fmt.Sprintf("%x", h.Sum(nil))[:12]
+	return fmt.Sprintf("%x", h.Sum(nil))[:16]
 }
