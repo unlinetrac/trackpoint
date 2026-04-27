@@ -43,3 +43,20 @@ func TestResolve_EmptyToken_ReturnsError(t *testing.T) {
 		t.Error("expected error for empty token")
 	}
 }
+
+// TestResolve_OverwrittenAlias_ReturnsMostRecentID verifies that when an alias
+// is overwritten, Resolve returns the most recently set target ID.
+func TestResolve_OverwrittenAlias_ReturnsMostRecentID(t *testing.T) {
+	st := alias.NewStore(tempDir(t))
+	_ = st.Set("staging", "snapshot-old")
+	_ = st.Set("staging", "snapshot-new")
+	r := alias.NewResolver(st)
+
+	id, err := r.Resolve("staging")
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if id != "snapshot-new" {
+		t.Errorf("got %q, want %q", id, "snapshot-new")
+	}
+}
