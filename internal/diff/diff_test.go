@@ -72,3 +72,17 @@ func TestResult_Summary(t *testing.T) {
 		t.Error("expected non-empty summary")
 	}
 }
+
+func TestCompare_MultipleChanges(t *testing.T) {
+	from := makeSnapshot(map[string]interface{}{"replicas": 2, "timeout": 30, "image": "nginx:1.24"})
+	to := makeSnapshot(map[string]interface{}{"replicas": 5, "image": "nginx:1.25", "env": "prod"})
+
+	result := diff.Compare(from, to)
+	// Expect: replicas modified, timeout removed, image modified, env added = 4 changes
+	if len(result.Changes) != 4 {
+		t.Fatalf("expected 4 changes, got %d", len(result.Changes))
+	}
+	if !result.HasChanges() {
+		t.Error("expected HasChanges to return true")
+	}
+}
